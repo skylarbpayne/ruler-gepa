@@ -1,0 +1,60 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ruler-gepa"
+version = "0.1.0"
+description = "RULER-style relative evaluation for GEPA prompt optimization"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "Skylar Payne" },
+]
+keywords = ["llm", "prompt-optimization", "gepa", "ruler", "reinforcement-learning"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    "gepa>=0.1.0",
+    "litellm>=1.0.0",
+    "numpy>=1.24.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/skylarbpayne/ruler-gepa"
+Documentation = "https://github.com/skylarbpayne/ruler-gepa#readme"
+Repository = "https://github.com/skylarbpayne/ruler-gepa"
+Issues = "https://github.com/skylarbpayne/ruler-gepa/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ruler_gepa"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
