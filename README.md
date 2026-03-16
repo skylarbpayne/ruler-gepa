@@ -46,6 +46,16 @@ uv sync --dev
 uv run pytest
 ```
 
+For a provider-backed toy optimization run:
+
+```bash
+export OPENAI_API_KEY=...
+export RULER_GEPA_GENERATION_MODEL=gpt-5.3-mini
+export RULER_GEPA_JUDGE_MODEL=gpt-5.3
+export RULER_GEPA_MUTATION_MODEL=gpt-5.3
+uv run python examples/toy_optimize.py
+```
+
 ```python
 from ruler_gepa import RulerAdapter, RulerConfig, RulerGEPAEngine
 
