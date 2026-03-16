@@ -7,11 +7,11 @@
 git clone https://github.com/skylarbpayne/ruler-gepa.git
 cd ruler-gepa
 
-# Install with dev dependencies
-pip install -e ".[dev]"
+# Create/update the uv-managed environment
+uv sync --dev
 
 # Run tests
-pytest tests/
+uv run pytest
 ```
 
 ## Project Status
@@ -33,12 +33,12 @@ The best way to contribute right now is reviewing and discussing the implementat
 
 ### Code Contributions
 
-Once the plan is finalized, we'll be implementing in phases:
+The initial research scaffold is in place. Current focus areas:
 
-1. **Phase 1:** Core adapter integration
-2. **Phase 2:** Enhanced reflection
-3. **Phase 3:** Benchmark experiments
-4. **Phase 4:** Ablations
+1. **Engine integration:** Connect the prototype engine to upstream GEPA state/frontier management
+2. **Enhanced reflection:** Expand mutation prompting around comparative datasets
+3. **Benchmarks:** Wire up PAPILLON and IFBench
+4. **Ablations:** Add experiment runners and cost tracking
 
 Pick a phase that interests you and open an issue to coordinate.
 
@@ -52,11 +52,11 @@ Pick a phase that interests you and open an issue to coordinate.
 
 ```bash
 # Run all tests
-pytest tests/
+uv run pytest
 
 # Run with coverage
-pytest tests/ --cov=src/ruler_gepa
+uv run pytest tests/ --cov=src/ruler_gepa
 
 # Type checking
-mypy src/ruler_gepa
+uv run mypy src/ruler_gepa
 ```
