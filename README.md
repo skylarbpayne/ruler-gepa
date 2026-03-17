@@ -28,7 +28,49 @@ What if we use RULER-style relative evaluation inside GEPA's evolutionary loop?
 
 🚧 **Research prototype** — Not production ready
 
+Implemented in this initial repo:
+- `RulerAdapter` for relative evaluation with optional judge injection
+- Ranking aggregation via Bradley-Terry, Elo, and Copeland methods
+- `RulerGEPAEngine` with majority-win acceptance logic, frontier tracking, and state export/import
+- Comparative reflection dataset and prompt helpers for mutation workflows
+- Ranking-cache persistence and lightweight cost/stats tracking
+- Benchmark registry and ablation-plan scaffolding for PAPILLON, IFBench, and HotPotQA
+- Basic prompt, adapter, engine, and aggregation tests
+
 See [PLAN.md](./PLAN.md) for the complete implementation plan.
+
+## Quick Start
+
+```bash
+uv sync --dev
+uv run pytest
+```
+
+For a provider-backed toy optimization run:
+
+```bash
+export OPENAI_API_KEY=...
+export RULER_GEPA_GENERATION_MODEL=gpt-5.3-mini
+export RULER_GEPA_JUDGE_MODEL=gpt-5.3
+export RULER_GEPA_MUTATION_MODEL=gpt-5.3
+uv run python examples/toy_optimize.py
+```
+
+```python
+from ruler_gepa import RulerAdapter, RulerConfig, RulerGEPAEngine
+
+adapter = RulerAdapter(
+    base_adapter=my_base_adapter,
+    config=RulerConfig(
+        judge_lm="openai/gpt-4.1",
+        comparison_batch_size=4,
+        rubric="Rank by correctness, clarity, and usefulness.",
+    ),
+)
+
+engine = RulerGEPAEngine(adapter=adapter, rubric="Prefer the more useful answer.")
+decision = engine.accept_candidate(new_candidate, parent_candidate, minibatch)
+```
 
 ## Quick Links
 

@@ -45,7 +45,8 @@ CANDIDATE_SECTION_TEMPLATE = """### Candidate {idx}
 """
 
 
-COMPARATIVE_REFLECTION_PROMPT = """You are improving a text artifact based on comparative evaluation against other approaches.
+COMPARATIVE_REFLECTION_PROMPT = """You are improving a text artifact based on comparative evaluation
+against other approaches.
 
 ## Current Artifact
 ```
@@ -70,7 +71,8 @@ Based on the comparisons above:
 
 ## Improved Artifact
 
-Write an improved version that addresses the gaps you identified. Be specific and targeted—don't just make it "better overall."
+Write an improved version that addresses the gaps you identified.
+Be specific and targeted. Do not just make it "better overall."
 
 Improved artifact:"""
 
@@ -107,19 +109,19 @@ def build_ranking_prompt(
     deduplicate: bool = True,
 ) -> str:
     """Build a complete ranking prompt.
-    
+
     Args:
         input_text: The task input being evaluated.
         candidates: List of candidate configurations (dicts of component -> text).
         outputs: List of outputs from running each candidate.
         rubric: Evaluation criteria.
         deduplicate: If True, show only differing parts of candidates.
-    
+
     Returns:
         Complete prompt string for LLM judge.
     """
     n = len(candidates)
-    
+
     # Build candidates section
     sections = []
     for i, (candidate, output) in enumerate(zip(candidates, outputs)):
@@ -130,9 +132,9 @@ def build_ranking_prompt(
             output=_truncate(output, 500),
         )
         sections.append(section)
-    
+
     candidates_section = "\n".join(sections)
-    
+
     return RANKING_PROMPT.format(
         n=n,
         input=_truncate(input_text, 1000),
@@ -147,40 +149,44 @@ def build_comparative_reflection_prompt(
     max_comparisons: int = 5,
 ) -> str:
     """Build reflection prompt with comparative feedback.
-    
+
     Args:
         current_artifact: The artifact being improved.
         comparison_results: List of comparison dicts with ranking info.
         max_comparisons: Maximum examples to include.
-    
+
     Returns:
         Complete reflection prompt.
     """
     entries = []
-    
+
     for result in comparison_results[:max_comparisons]:
         our_rank = result["ranking"].index(0) + 1
         total = len(result["ranking"])
-        
+
         # Build winners section
         winners = []
-        for idx in result["ranking"][:result["ranking"].index(0)]:
+        for idx in result["ranking"][: result["ranking"].index(0)]:
             if idx != 0:
-                winners.append(WINNER_ENTRY.format(
-                    approach_summary=_summarize_approach(result["candidates"][idx]),
-                    output_preview=_truncate(result["outputs"][idx], 200),
-                ))
+                winners.append(
+                    WINNER_ENTRY.format(
+                        approach_summary=_summarize_approach(result["candidates"][idx]),
+                        output_preview=_truncate(result["outputs"][idx], 200),
+                    )
+                )
         winners_section = "\n".join(winners) if winners else "(None - we ranked first)"
-        
+
         # Build losers section
         losers = []
-        for idx in result["ranking"][result["ranking"].index(0) + 1:]:
-            losers.append(LOSER_ENTRY.format(
-                approach_summary=_summarize_approach(result["candidates"][idx]),
-                output_preview=_truncate(result["outputs"][idx], 200),
-            ))
+        for idx in result["ranking"][result["ranking"].index(0) + 1 :]:
+            losers.append(
+                LOSER_ENTRY.format(
+                    approach_summary=_summarize_approach(result["candidates"][idx]),
+                    output_preview=_truncate(result["outputs"][idx], 200),
+                )
+            )
         losers_section = "\n".join(losers) if losers else "(None - we ranked last)"
-        
+
         entry = COMPARISON_ENTRY_TEMPLATE.format(
             input_summary=_truncate(str(result["example"]), 100),
             our_rank=our_rank,
@@ -190,9 +196,9 @@ def build_comparative_reflection_prompt(
             losers_section=losers_section,
         )
         entries.append(entry)
-    
+
     comparisons_section = "\n---\n".join(entries)
-    
+
     return COMPARATIVE_REFLECTION_PROMPT.format(
         current_artifact=current_artifact,
         comparisons_section=comparisons_section,
@@ -207,22 +213,22 @@ def _format_candidate(
     """Format a candidate, optionally showing only unique parts."""
     if not deduplicate or len(all_candidates) <= 1:
         return "\n".join(f"{k}: {v}" for k, v in candidate.items())
-    
+
     # Find common values across all candidates
     common_keys = set(candidate.keys())
     for other in all_candidates:
         common_keys &= set(other.keys())
-    
+
     # Show only differing parts
     unique_parts = {}
     for k in candidate:
         values = [c.get(k) for c in all_candidates]
         if len(set(values)) > 1:  # Not all same
             unique_parts[k] = candidate[k]
-    
+
     if not unique_parts:
         return "(identical to other candidates)"
-    
+
     return "\n".join(f"{k}: {v}" for k, v in unique_parts.items())
 
 
@@ -238,4 +244,4 @@ def _truncate(text: str, max_len: int) -> str:
     text = str(text)
     if len(text) <= max_len:
         return text
-    return text[:max_len - 3] + "..."
+    return text[: max_len - 3] + "..."
