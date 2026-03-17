@@ -117,7 +117,7 @@ class ToySupportAdapter:
             response = litellm.completion(
                 model=self.generation_model,
                 messages=messages,
-                temperature=0.2,
+                **completion_kwargs_for_model(self.generation_model, temperature=0.2),
             )
             outputs.append(response.choices[0].message.content.strip())
         return EvalResult(outputs=outputs)
@@ -146,7 +146,7 @@ def mutate_candidate(
     response = litellm.completion(
         model=mutation_model,
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.4,
+        **completion_kwargs_for_model(mutation_model, temperature=0.4),
     )
     mutated_text = response.choices[0].message.content.strip()
     return {"system_prompt": parse_improved_prompt(mutated_text)}
@@ -191,9 +191,10 @@ def print_candidate(label: str, candidate: dict[str, str]) -> None:
 
 
 def run_optimization(iterations: int = 3) -> None:
-    generation_model = os.getenv("RULER_GEPA_GENERATION_MODEL", "gpt-5.3-mini")
-    judge_model = os.getenv("RULER_GEPA_JUDGE_MODEL", "gpt-5.3")
+    generation_model = normalize_model_name(os.getenv("RULER_GEPA_GENERATION_MODEL", "gpt-5.3-mini"))
+    judge_model = normalize_model_name(os.getenv("RULER_GEPA_JUDGE_MODEL", "gpt-5.3"))
     mutation_model = os.getenv("RULER_GEPA_MUTATION_MODEL", judge_model)
+    mutation_model = normalize_model_name(mutation_model)
 
     adapter = RulerAdapter(
         base_adapter=ToySupportAdapter(generation_model=generation_model),
@@ -260,6 +261,22 @@ def ensure_secret_present() -> None:
     raise SystemExit(
         "Missing OPENAI_API_KEY. Set it in your shell or a local gitignored env file before running this example."
     )
+
+
+def normalize_model_name(model: str) -> str:
+    """Expand bare OpenAI model IDs to the provider-qualified format litellm expects."""
+    if "/" in model:
+        return model
+    if os.getenv("OPENAI_API_KEY"):
+        return f"openai/{model}"
+    return model
+
+
+def completion_kwargs_for_model(model: str, temperature: float) -> dict[str, float]:
+    """Apply temperature only when the target model supports it."""
+    if "gpt-5" in model.lower():
+        return {}
+    return {"temperature": temperature}
 
 
 if __name__ == "__main__":

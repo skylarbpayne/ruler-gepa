@@ -277,10 +277,14 @@ class RulerAdapter:
         try:
             import litellm
 
+            completion_kwargs: dict[str, Any] = {}
+            if "gpt-5" not in self.config.judge_lm.lower():
+                completion_kwargs["temperature"] = 0.0
+
             response = litellm.completion(
                 model=self.config.judge_lm,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.0,  # Deterministic for consistency
+                **completion_kwargs,
             )
             return response.choices[0].message.content
         except ImportError:
