@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -281,12 +282,19 @@ class RulerAdapter:
             if "gpt-5" not in self.config.judge_lm.lower():
                 completion_kwargs["temperature"] = 0.0
 
-            response = litellm.completion(
-                model=self.config.judge_lm,
-                messages=[{"role": "user", "content": prompt}],
-                **completion_kwargs,
-            )
-            return response.choices[0].message.content
+            for attempt in range(5):
+                try:
+                    response = litellm.completion(
+                        model=self.config.judge_lm,
+                        messages=[{"role": "user", "content": prompt}],
+                        **completion_kwargs,
+                    )
+                    return response.choices[0].message.content
+                except Exception as exc:
+                    delay = _extract_retry_delay(str(exc))
+                    if delay is None or attempt == 4:
+                        raise
+                    time.sleep(delay + 1)
         except ImportError:
             raise ImportError("litellm is required for RULER evaluation")
 
@@ -342,3 +350,11 @@ class RulerAdapter:
         parts = [self._hash_candidate(c) for c in candidates]
         parts.append(hashlib.md5(str(example).encode()).hexdigest()[:12])
         return ":".join(parts)
+
+
+def _extract_retry_delay(message: str) -> float | None:
+    """Parse provider retry delays from error messages."""
+    match = re.search(r"try again in ([0-9]+(?:\\.[0-9]+)?)s", message, re.IGNORECASE)
+    if not match:
+        return None
+    return float(match.group(1))

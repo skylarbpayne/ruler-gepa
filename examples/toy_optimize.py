@@ -12,7 +12,9 @@ Optional environment:
 from __future__ import annotations
 
 import os
+import re
 import sys
+import time
 from dataclasses import dataclass
 from textwrap import indent
 from typing import Any
@@ -114,10 +116,10 @@ class ToySupportAdapter:
                 {"role": "system", "content": candidate["system_prompt"]},
                 {"role": "user", "content": self._build_user_prompt(example)},
             ]
-            response = litellm.completion(
+            response = call_completion(
                 model=self.generation_model,
                 messages=messages,
-                **completion_kwargs_for_model(self.generation_model, temperature=0.2),
+                temperature=0.2,
             )
             outputs.append(response.choices[0].message.content.strip())
         return EvalResult(outputs=outputs)
@@ -143,10 +145,10 @@ def mutate_candidate(
         current_prompt=current_candidate["system_prompt"],
         reflection_prompt=reflection["prompt"],
     )
-    response = litellm.completion(
+    response = call_completion(
         model=mutation_model,
         messages=[{"role": "user", "content": prompt}],
-        **completion_kwargs_for_model(mutation_model, temperature=0.4),
+        temperature=0.4,
     )
     mutated_text = response.choices[0].message.content.strip()
     return {"system_prompt": parse_improved_prompt(mutated_text)}
@@ -190,11 +192,15 @@ def print_candidate(label: str, candidate: dict[str, str]) -> None:
     print(indent(candidate["system_prompt"], prefix="  "))
 
 
-def run_optimization(iterations: int = 3) -> None:
+def run_optimization(iterations: int | None = None) -> None:
     generation_model = normalize_model_name(os.getenv("RULER_GEPA_GENERATION_MODEL", "gpt-5.3-mini"))
     judge_model = normalize_model_name(os.getenv("RULER_GEPA_JUDGE_MODEL", "gpt-5.3"))
     mutation_model = os.getenv("RULER_GEPA_MUTATION_MODEL", judge_model)
     mutation_model = normalize_model_name(mutation_model)
+    iterations = iterations or int(os.getenv("RULER_GEPA_ITERATIONS", "3"))
+    max_examples = int(os.getenv("RULER_GEPA_MAX_EXAMPLES", str(len(TOY_DATASET))))
+    pool_size = int(os.getenv("RULER_GEPA_POOL_SIZE", str(len(BASELINE_CANDIDATES))))
+    dataset = TOY_DATASET[:max_examples]
 
     adapter = RulerAdapter(
         base_adapter=ToySupportAdapter(generation_model=generation_model),
@@ -205,7 +211,7 @@ def run_optimization(iterations: int = 3) -> None:
             cache_rankings=True,
         ),
     )
-    engine = RulerGEPAEngine(adapter=adapter, trainset=TOY_DATASET, rubric=OBJECTIVE)
+    engine = RulerGEPAEngine(adapter=adapter, trainset=dataset, rubric=OBJECTIVE)
 
     current_candidate = {"system_prompt": SEED_PROMPT}
     engine.register_candidate(current_candidate, accepted=True, metadata={"role": "seed"})
@@ -215,7 +221,7 @@ def run_optimization(iterations: int = 3) -> None:
     print(f"Mutation model: {mutation_model}")
     print_candidate("Seed prompt:", current_candidate)
 
-    comparison_pool = list(BASELINE_CANDIDATES)
+    comparison_pool = list(BASELINE_CANDIDATES[:pool_size])
 
     for iteration in range(1, iterations + 1):
         print(f"\n=== Iteration {iteration} ===")
@@ -223,7 +229,7 @@ def run_optimization(iterations: int = 3) -> None:
             adapter=adapter,
             current_candidate=current_candidate,
             comparison_pool=comparison_pool,
-            dataset=TOY_DATASET,
+            dataset=dataset,
         )
         proposed_candidate = mutate_candidate(current_candidate, comparison_results, mutation_model)
         print_candidate("Proposed prompt:", proposed_candidate)
@@ -231,7 +237,7 @@ def run_optimization(iterations: int = 3) -> None:
         decision = engine.accept_candidate(
             new_candidate=proposed_candidate,
             parent_candidate=current_candidate,
-            minibatch=TOY_DATASET,
+            minibatch=dataset,
         )
         print(
             f"Accepted: {decision.accepted} | "
@@ -247,7 +253,7 @@ def run_optimization(iterations: int = 3) -> None:
             for record in engine.select_frontier(limit=3)
             if record.candidate != current_candidate
         ]
-        comparison_pool = (dynamic_pool + BASELINE_CANDIDATES)[:2]
+        comparison_pool = (dynamic_pool + BASELINE_CANDIDATES)[:pool_size]
 
     print_candidate("Final prompt:", current_candidate)
     print("\nAdapter stats:")
@@ -277,6 +283,29 @@ def completion_kwargs_for_model(model: str, temperature: float) -> dict[str, flo
     if "gpt-5" in model.lower():
         return {}
     return {"temperature": temperature}
+
+
+def call_completion(model: str, messages: list[dict[str, str]], temperature: float) -> Any:
+    """Wrap litellm with basic rate-limit backoff."""
+    kwargs = completion_kwargs_for_model(model, temperature)
+    for attempt in range(5):
+        try:
+            return litellm.completion(model=model, messages=messages, **kwargs)
+        except Exception as exc:
+            delay = extract_retry_delay(str(exc))
+            if delay is None or attempt == 4:
+                raise
+            print(f"Rate limited for {model}; sleeping {delay + 1:.0f}s before retry.")
+            time.sleep(delay + 1)
+    raise RuntimeError("Unreachable")
+
+
+def extract_retry_delay(message: str) -> float | None:
+    """Parse provider retry delays from error messages."""
+    match = re.search(r"try again in ([0-9]+(?:\\.[0-9]+)?)s", message, re.IGNORECASE)
+    if not match:
+        return None
+    return float(match.group(1))
 
 
 if __name__ == "__main__":
